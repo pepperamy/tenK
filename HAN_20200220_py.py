@@ -65,9 +65,9 @@ BATCH_SIZE = 24
 #metrics_auc = {}
 metrics_prcs = {}
 #num_folder = 5
-path = '/jujun/fraudprediction_10k/data/'
-hanpath = '/home/jujun/fraudprediction_10k/HAN/'
-date = '20200220'
+path = '/home/jujun/fraudprediction_10k/data/'
+hanpath = '/home/jujun/fraudprediction_10k/HAN/cp-{epoch:04d}.ckpt'
+date = '20200222'
 
 
 with open(path + 'word_index_50000_20200215','rb') as fp:
@@ -111,9 +111,6 @@ print("y train:", y_train.value_counts())
 
 y_test= pd.Series(test_labels)
 print("y test:", y_test.value_counts())
-
-
-
 
 
 
@@ -316,7 +313,7 @@ def basicModel(embedding_matrix,MAX_NB_WORDS,MAX_PARA_LENGTH,):
 
 
 
-def trainModel(x_train, y_train, Model_Filepath, model, x_val, y_val):
+def trainModel(x_train, y_train, Model_Filepath, model):
     
     
     #class_weights = class_weight.compute_class_weight('balanced',
@@ -324,55 +321,56 @@ def trainModel(x_train, y_train, Model_Filepath, model, x_val, y_val):
     #                                             y_train)
     #print("class weights:", class_weights)
     
-    class_weights = {0: 0.50, 1: 45.0}
+    class_weights = {0: 1, 1:10.0}
     print("class weights:", class_weights)
     
-    val_class_weights = class_weight.compute_class_weight('balanced',
-                                             np.unique(y_val),
-                                             y_val)
-    print("validation class weights:", val_class_weights)
+#     val_class_weights = class_weight.compute_class_weight('balanced',
+#                                              np.unique(y_val),
+#                                              y_val)
+#     print("validation class weights:", val_class_weights)
     
-    val_sample_weights = []
-    for y in y_val:
-        if y == 1:
-            val_sample_weights.append(val_class_weights[1])
-        else: val_sample_weights.append(val_class_weights[0])
-    val_sample_weights = np.asarray(val_sample_weights)
+#     val_sample_weights = []
+#     for y in y_val:
+#         if y == 1:
+#             val_sample_weights.append(val_class_weights[1])
+#         else: val_sample_weights.append(val_class_weights[0])
+#     val_sample_weights = np.asarray(val_sample_weights)
     
-    print(val_sample_weights[0:10])
+#    print(val_sample_weights[0:10])
     
-    print("shape of weights: ",val_sample_weights.shape, "shape y_val: ", y_val.shape)
+#    print("shape of weights: ",val_sample_weights.shape, "shape y_val: ", y_val.shape)
     
     model.compile(loss='binary_crossentropy',
               optimizer= opt,
               metrics=['acc'])
     
-    auc_eval = AUCEvaluation(validation_data=(x_val, y_val), interval=1)
-    precision_eval = PrecisionEvaluation(validation_data=(x_val, y_val), interval=1)
+    auc_eval = AUCEvaluation(validation_data=(x_train, y_train), interval=1)
+    precision_eval = PrecisionEvaluation(validation_data=(x_train, y_train), interval=1)
     
     #earlyStopping = EarlyStopping(monitor='Avg_Prec',patience = 5, verbose =2, mode ='max')
-    checkpoint = ModelCheckpoint(('weights{epoch:08d}.h5', 
-                                     save_weights_only=True, period=5)
+    checkpoint = ModelCheckpoint(Model_Filepath,save_weights_only=True, period=5)
     #monitor='Avg_Prec', verbose=2, save_best_only=True, mode ='max')
                                  
     print("training start...")
-        training=model.fit(x_train,y_train,epochs=25,batch_size=BATCH_SIZE,callbacks=[auc_eval,precision_eval,checkpoint],
+    training=model.fit(x_train,y_train,epochs=25,batch_size=BATCH_SIZE,callbacks=[auc_eval,precision_eval,checkpoint],
                            class_weight = class_weights,verbose=2) #validation_data=[x_val,y_val,val_sample_weights],earlyStopping,
       
-    hist_data = list(zip(training.history['acc'],\
-                                 training.history['loss'],\
-                                 training.history['val_acc'],\
-                                 training.history['val_loss'],\
-                                 training.history['auc'],
-                                 training.history['Avg_Prec']))
-    hist_data=pd.DataFrame(hist_data, \
-                                   index = range(len(training.history['acc'])),
-                                   columns =['acc','loss','val_acc','val_loss','auc','Avg_Prec'])
-    hist_data[['acc','val_acc','Avg_Prec','auc']].plot.line()
-    plt.savefig('plot1.pdf') 
-    hist_data[['loss','val_loss']].plot.line()
-    plt.savefig('plot2.pdf')
-    plt.close()
+#     hist_data = list(zip(training.history['acc'],\
+#                                  training.history['loss'],\
+#                                  training.history['val_acc'],\
+#                                  training.history['val_loss'],\
+#                                  training.history['auc'],
+#                                  training.history['Avg_Prec']))
+#     hist_data=pd.DataFrame(hist_data, \
+#                                    index = range(len(training.history['acc'])),
+#                                    columns =['acc','loss','val_acc','val_loss','auc','Avg_Prec'])
+                                 
+                                 
+#     hist_data[['acc','val_acc','Avg_Prec','auc']].plot.line()
+#     plt.savefig('plot1.pdf') 
+#     hist_data[['loss','val_loss']].plot.line()
+#     plt.savefig('plot2.pdf')
+#     plt.close()
             
     
     print('training end...')
@@ -387,23 +385,23 @@ def trainModel(x_train, y_train, Model_Filepath, model, x_val, y_val):
 # X_trainset, X_val, y_trainset, y_val = train_test_split( X_train, y_train, test_size=0.2, stratify=y_train, random_state=42)
 
 basicmodel = basicModel(embedding_matrix,MAX_NB_WORDS,MAX_PARA_LENGTH)
-# training = trainModel(X_trainset, y_trainset, ModelName, basicmodel) #, X_val, y_val)
 training = trainModel(X_train, y_train, ModelName, basicmodel)
 
-basicmodel.load_weights(ModelName)
-pred = basicmodel.predict(X_test)
+# basicmodel.load_weights(ModelName)
+
+# pred = basicmodel.predict(X_test)
 
 
-ap_test = average_precision_score(y_test, pred)
-print("AP: ", ap_test)
+# ap_test = average_precision_score(y_test, pred)
+# print("AP: ", ap_test)
 
-auc_test = roc_auc_score(y_test, pred)
-print("AUC: ", auc_test)
+# auc_test = roc_auc_score(y_test, pred)
+# print("AUC: ", auc_test)
 
-hsty = training.history
-with open('history_'+ date,'wb') as fp:
-    pickle.dump(hsty,fp)
-fp.close()
+# hsty = training.history
+# with open('history_'+ date,'wb') as fp:
+#     pickle.dump(hsty,fp)
+# fp.close()
 
 
 
