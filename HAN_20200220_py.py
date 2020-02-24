@@ -385,19 +385,32 @@ def trainModel(x_train, y_train, Model_Filepath, model):
 # X_trainset, X_val, y_trainset, y_val = train_test_split( X_train, y_train, test_size=0.2, stratify=y_train, random_state=42)
 
 basicmodel = basicModel(embedding_matrix,MAX_NB_WORDS,MAX_PARA_LENGTH)
-training = trainModel(X_train, y_train, ModelName, basicmodel)
+#training = trainModel(X_train, y_train, ModelName, basicmodel)
 
-# basicmodel.load_weights(ModelName)
+ModelNames = ["/home/jujun/fraudprediction_10k/HAN/cp-0005.ckpthanmodel_dropout_20200222",
+         "/home/jujun/fraudprediction_10k/HAN/cp-0010.ckpthanmodel_dropout_20200222",
+         "/home/jujun/fraudprediction_10k/HAN/cp-0015.ckpthanmodel_dropout_20200222",
+         "/home/jujun/fraudprediction_10k/HAN/cp-0020.ckpthanmodel_dropout_20200222",
+         "/home/jujun/fraudprediction_10k/HAN/cp-0020.ckpthanmodel_dropout_20200222"]
 
-# pred = basicmodel.predict(X_test)
-
-
-# ap_test = average_precision_score(y_test, pred)
-# print("AP: ", ap_test)
-
-# auc_test = roc_auc_score(y_test, pred)
-# print("AUC: ", auc_test)
-
+ap_list = []
+auc_list = []
+for m in ModelNames:
+    basicmodel.load_weights(m)
+    pred = basicmodel.predict(X_test)
+    ap_test = average_precision_score(y_test, pred)
+    ap_list.append(ap_test)
+    print("AP: ", ap_test)
+    auc_test = roc_auc_score(y_test, pred)
+    auc_list.append(auc_test)
+    print("AUC: ", auc_test)
+    
+hist_data = list(zip(ap_list,auc_list))
+hist_data = pd.DataFrame(hist_data, index = [5,10,15,20,25],columns =['average_precision','AUC'])
+hist_data[['average_precision','AUC']].plot.line()
+plt.xlim(5, 25,5)
+plt.savefig('plot_20200223.pdf') 
+    
 # hsty = training.history
 # with open('history_'+ date,'wb') as fp:
 #     pickle.dump(hsty,fp)
