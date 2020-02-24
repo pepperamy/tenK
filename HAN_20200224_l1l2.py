@@ -58,6 +58,7 @@ l12_reg = l1_l2(l1 = 1e-6,l2 = 1e-6)
 BATCH_SIZE = 24
 #metrics_auc = {}
 metrics_prcs = {}
+epochs_num = 35
 #num_folder = 5
 path = '/home/jujun/fraudprediction_10k/data/'
 hanpath = '/home/jujun/fraudprediction_10k/HAN/cp-{epoch:04d}.ckpt'
@@ -139,7 +140,7 @@ def performance_measure(pred_yp, y):
     return rate
 
 
-class AUCEvaluation(Callback):
+class Evaluation(Callback):
     """ Show AUC after interval number of epoches """
     def __init__(self, validation_data=(), interval=1):
         super(Callback, self).__init__()
@@ -151,27 +152,30 @@ class AUCEvaluation(Callback):
             y_pred = self.model.predict(self.X_val, verbose=0)
             score = roc_auc_score(self.y_val, y_pred)
             logs['auc'] = score
+            score_ap = average_precision_score(self.y_val, y_pred)
+            logs['Avg_Prec'] = score_ap
             #tencile=performance_measure(y_pred, self.y_val)
             #logs['tencile'] = tencile
             print(" epoch:{:d} AUC: {:.4f}".format(epoch, score))
+            print(" epoch:{:d} Avg_Prec: {:.4f}".format(epoch, score_ap))
 
 
-class PrecisionEvaluation(Callback):
-    """ Show average Precision after interval number of epoches """
-    def __init__(self, validation_data=(), interval=1):
-        super(Callback, self).__init__()
-        self.interval = interval
-        self.X_val, self.y_val = validation_data
+# class PrecisionEvaluation(Callback):
+#     """ Show average Precision after interval number of epoches """
+#     def __init__(self, validation_data=(), interval=1):
+#         super(Callback, self).__init__()
+#         self.interval = interval
+#         self.X_val, self.y_val = validation_data
 
-    def on_epoch_end(self, epoch, logs={}):
-        if epoch % self.interval == 0:
-            y_pred = self.model.predict(self.X_val, verbose=0)
-            score = average_precision_score(self.y_val, y_pred)
-            logs['Avg_Prec'] = score
-            #tencile=performance_measure(y_pred, self.y_val)
-            #logs['tencile'] = tencile
-            #print('prec_socre',score)
-            print(" epoch:{:d} Avg_Prec: {:.4f}".format(epoch, score))
+#     def on_epoch_end(self, epoch, logs={}):
+#         if epoch % self.interval == 0:
+#             y_pred = self.model.predict(self.X_val, verbose=0)
+#             score = average_precision_score(self.y_val, y_pred)
+#             logs['Avg_Prec'] = score
+#             #tencile=performance_measure(y_pred, self.y_val)
+#             #logs['tencile'] = tencile
+#             #print('prec_socre',score)
+#             print(" epoch:{:d} Avg_Prec: {:.4f}".format(epoch, score))
 
 
 
@@ -331,15 +335,15 @@ def trainModel(x_train, y_train, Model_Filepath, model):
               optimizer= opt,
               metrics=['acc'])
     
-    auc_eval = AUCEvaluation(validation_data=(x_train, y_train), interval=1)
-    precision_eval = PrecisionEvaluation(validation_data=(x_train, y_train), interval=1)
+    auc_ap_eval = Evaluation(validation_data=(x_train, y_train), interval=1)
+    #precision_eval = PrecisionEvaluation(validation_data=(x_train, y_train), interval=1)
     
     #earlyStopping = EarlyStopping(monitor='Avg_Prec',patience = 5, verbose =2, mode ='max')
     checkpoint = ModelCheckpoint(Model_Filepath,save_weights_only=True, period=5)
     #monitor='Avg_Prec', verbose=2, save_best_only=True, mode ='max')
                                  
     print("training start...")
-    training=model.fit(x_train,y_train,epochs=25,batch_size=BATCH_SIZE,callbacks=[auc_eval,precision_eval,checkpoint],
+    training=model.fit(x_train,y_train,epochs=epochs_num,batch_size=BATCH_SIZE,callbacks=[auc_ap_eval,checkpoint],
                            class_weight = class_weights,verbose=2) #validation_data=[x_val,y_val,val_sample_weights],earlyStopping,
       
 #     hist_data = list(zip(training.history['acc'],\
