@@ -28,6 +28,8 @@ from keras.models import Model, Sequential
 from keras.regularizers import l2,l1,l1_l2
 from keras.callbacks import Callback,EarlyStopping, ModelCheckpoint
 from sklearn.utils import class_weight
+from keras.initializers import Constant
+
 
 from keras.callbacks import Callback
 
@@ -62,33 +64,37 @@ epochs_num = 35
 #num_folder = 5
 path = '/home/jujun/fraudprediction_10k/data/'
 hanpath = '/home/jujun/fraudprediction_10k/HAN/cp-{epoch:04d}.ckpt'
-date = '20200224'
+date = '20200305'
 
 
-with open(path + 'word_index_50000_20200215','rb') as fp:
+with open(path + 'word_index_50000_20200228','rb') as fp:
     word_index_50000 = pickle.load(fp)
 
 type(word_index_50000)
 
 
-data = np.load(path + 'handata_20200215.npy')
+data = np.load(path + 'handata_20200228.npy')
 print("data shape:", data.shape)
 
-embedding_matrix = np.load(path +'embedding_matrix_20200215.npy')
+embedding_matrix = np.load(path +'embedding_matrix_20200228.npy')
 print("embeddng matrix shape:", embedding_matrix.shape)
 
 
 train_labels = load_data(path +'y_train_20200214')
+train_labels = train_labels[0:3000]
 print(len(train_labels))
 
 test_labels = load_data(path + 'y_test_20200214')
+test_labels = test_labels[0:800]
 print(len(test_labels))
 
 
 train_indecis = load_data(path + 'indices_train_20200214')
+train_indecis = train_indecis[0:3000]
 print(len(train_indecis))
 
 test_indecis = load_data(path + 'indices_test_20200214')
+test_indecis = test_indecis[0:800]
 print(len(test_indecis))
 
 X_train = data[train_indecis]
@@ -97,7 +103,7 @@ X_test = data[test_indecis]
 print(X_train.shape)
 print(X_test.shape)
 
-ModelName = hanpath + 'hanmodel_l1l2_' + date 
+ModelName = hanpath + 'hanmodel_l1l2_drpt_' + date 
 
 y_train = pd.Series(train_labels)
 
@@ -264,34 +270,39 @@ class WeightedSum(Layer):
 
 
 def basicModel(embedding_matrix,MAX_NB_WORDS,MAX_PARA_LENGTH,):
-    embedding_layer = Embedding((MAX_NB_WORDS+ 1),
-                            EMBEDDING_DIM,
-                            weights=[embedding_matrix],
-                            mask_zero=True,
-                            input_length=MAX_PARA_LENGTH,
-                            trainable=True)    
+    embedding_layer = Embedding( MAX_NB_WORDS+ 1,
+                        EMBEDDING_DIM,
+                        #weights = [embedding_matrix],
+                        embeddings_initializer = Constant(embedding_matrix),
+                        mask_zero=True,
+                        input_length=MAX_PARA_LENGTH,
+                        trainable=False)    
     
     
     para_input = Input(shape=(MAX_PARA_LENGTH, ), dtype='int32')
     embedded_sequences = embedding_layer(para_input)
-    norm_sequence = BatchNormalization()(embedded_sequences)
-    l_att = AttLayer(regularizer = l12_reg)(norm_sequence)
-    weighted_sum = WeightedSum()([norm_sequence,l_att])
+    #norm_sequence = BatchNormalization()(embedded_sequences)
+    drop_out = Dropout(0.2)(norm_sequence)
+    l_att = AttLayer(regularizer = l12_reg)(embedded_sequences)
+    weighted_sum = WeightedSum()([drop_out,l_att])
     paraEncoder =Model(para_input,weighted_sum)
     paraEncoder.summary()
     
     doc_input = Input(shape=(MAX_PARAS, MAX_PARA_LENGTH), dtype='int32')
     doc_encoder = TimeDistributed(paraEncoder)(doc_input)
     mask_doc = Masking(mask_value=0.0)(doc_encoder)
-    norm_doc = BatchNormalization()(mask_doc)
-    l_lstm_para = GRU(100, return_sequences=True,implementation=2,kernel_regularizer=l12_reg)(norm_doc)
-    norm_doc_1 = BatchNormalization()(l_lstm_para)
-    l_att_para = AttLayer(regularizer=l12_reg)(norm_doc_1)
-    weighted_sum_doc = WeightedSum()([norm_doc_1, l_att_para])
+    #norm_doc = BatchNormalization()(mask_doc)
+    l_lstm_para = LSTM(100, return_sequences=True,\
+                      implementation=2, \
+                      recurrent_dropout = 0.2,
+                      dropout=0.2)(doc_encoder)
+    #norm_doc_1 = BatchNormalization()(l_lstm_para)
+    drop_out = Dropout(0.2)(l_lstm_para) 
+    l_att_para = AttLayer(regularizer=l12_reg)(l_lstm_para)
+    weighted_sum_doc = WeightedSum()([drop_out, l_att_para])
 
-    batch_norm = BatchNormalization()(weighted_sum_doc)
-
-    drop_out = Dropout(0.1)(batch_norm)
+    #batch_norm = BatchNormalization()(weighted_sum_doc)
+    drop_out = Dropout(0.2)(weighted_sum_doc)
 
     preds = Dense(1, activation='sigmoid',kernel_regularizer=l12_reg)(drop_out) 
 
@@ -312,7 +323,7 @@ def trainModel(x_train, y_train, Model_Filepath, model):
     #                                             y_train)
     #print("class weights:", class_weights)
     
-    class_weights = {0: 1, 1:10.0}
+    class_weights = {0: 1, 1:15.0}
     print("class weights:", class_weights)
     
 #     val_class_weights = class_weight.compute_class_weight('balanced',
@@ -378,30 +389,34 @@ def trainModel(x_train, y_train, Model_Filepath, model):
 basicmodel = basicModel(embedding_matrix,MAX_NB_WORDS,MAX_PARA_LENGTH)
 training = trainModel(X_train, y_train, ModelName, basicmodel)
 
-# ModelNames = ["/home/jujun/fraudprediction_10k/HAN/cp-0005.ckpthanmodel_dropout_20200222",
-#          "/home/jujun/fraudprediction_10k/HAN/cp-0010.ckpthanmodel_dropout_20200222",
-#          "/home/jujun/fraudprediction_10k/HAN/cp-0015.ckpthanmodel_dropout_20200222",
-#          "/home/jujun/fraudprediction_10k/HAN/cp-0020.ckpthanmodel_dropout_20200222",
-#          "/home/jujun/fraudprediction_10k/HAN/cp-0020.ckpthanmodel_dropout_20200222"]
+ModelNames = ["/home/jujun/fraudprediction_10k/HAN/cp-0005.ckpt" +'hanmodel_l1l2_drpt_' + date,
+         "/home/jujun/fraudprediction_10k/HAN/cp-0010.ckpt" +'hanmodel_l1l2_drpt_' + date,
+         "/home/jujun/fraudprediction_10k/HAN/cp-0015.ckpt" +'hanmodel_l1l2_drpt_' + date,
+         "/home/jujun/fraudprediction_10k/HAN/cp-0020.ckpt" +'hanmodel_l1l2_drpt_' + date,
+         "/home/jujun/fraudprediction_10k/HAN/cp-0025.ckpt" +'hanmodel_l1l2_drpt_' + date,
+        "/home/jujun/fraudprediction_10k/HAN/cp-0030.ckpt" +'hanmodel_l1l2_drpt_' + date,
+        "/home/jujun/fraudprediction_10k/HAN/cp-0035.ckpt"+'hanmodel_l1l2_drpt_' + date]
 
-# ap_list = []
-# auc_list = []
-# for m in ModelNames:
-#     basicmodel.load_weights(m)
-#     pred = basicmodel.predict(X_test)
-#     ap_test = average_precision_score(y_test, pred)
-#     ap_list.append(ap_test)
-#     print("AP: ", ap_test)
-#     auc_test = roc_auc_score(y_test, pred)
-#     auc_list.append(auc_test)
-#     print("AUC: ", auc_test)
+ap_list = []
+auc_list = []
+for m in ModelNames:
+    basicmodel.load_weights(m)
+    pred = basicmodel.predict(X_test)
+    ap_test = average_precision_score(y_test, pred)
+    ap_list.append(ap_test)
+    print("AP: ", ap_test)
+    auc_test = roc_auc_score(y_test, pred)
+    auc_list.append(auc_test)
+    print("AUC: ", auc_test)
     
-# hist_data = list(zip(ap_list,auc_list))
-# hist_data = pd.DataFrame(hist_data, index = [5,10,15,20,25],columns =['average_precision','AUC'])
-# hist_data[['average_precision','AUC']].plot.line()
-# plt.xlim(5, 25,5)
-# plt.savefig('plot_l1l2'+date+ '.pdf') 
+hist_data = list(zip(ap_list,auc_list))
+hist_data = pd.DataFrame(hist_data, index = [5,10,15,20,25,30,35],columns =['average_precision','AUC'])
+hist_data[['average_precision','AUC']].plot.line()
+plt.xticks(np.arange(5, 35, step = 5))
+plt.savefig('plot_l1l2'+date+ '.pdf')
     
+    
+print("finish!")
 # hsty = training.history
 # with open('history_'+ date,'wb') as fp:
 #     pickle.dump(hsty,fp)
