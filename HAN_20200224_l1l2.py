@@ -81,20 +81,20 @@ print("embeddng matrix shape:", embedding_matrix.shape)
 
 
 train_labels = load_data(path +'y_train_20200214')
-train_labels = train_labels[0:3000]
+#train_labels = train_labels[0:3000]
 print(len(train_labels))
 
 test_labels = load_data(path + 'y_test_20200214')
-test_labels = test_labels[0:800]
+#test_labels = test_labels[0:800]
 print(len(test_labels))
 
 
 train_indecis = load_data(path + 'indices_train_20200214')
-train_indecis = train_indecis[0:3000]
+#train_indecis = train_indecis[0:3000]
 print(len(train_indecis))
 
 test_indecis = load_data(path + 'indices_test_20200214')
-test_indecis = test_indecis[0:800]
+#test_indecis = test_indecis[0:800]
 print(len(test_indecis))
 
 X_train = data[train_indecis]
@@ -282,7 +282,7 @@ def basicModel(embedding_matrix,MAX_NB_WORDS,MAX_PARA_LENGTH,):
     para_input = Input(shape=(MAX_PARA_LENGTH, ), dtype='int32')
     embedded_sequences = embedding_layer(para_input)
     #norm_sequence = BatchNormalization()(embedded_sequences)
-    drop_out = Dropout(0.2)(norm_sequence)
+    drop_out = Dropout(0.2)(embedded_sequences)
     l_att = AttLayer(regularizer = l12_reg)(embedded_sequences)
     weighted_sum = WeightedSum()([drop_out,l_att])
     paraEncoder =Model(para_input,weighted_sum)
@@ -295,7 +295,7 @@ def basicModel(embedding_matrix,MAX_NB_WORDS,MAX_PARA_LENGTH,):
     l_lstm_para = LSTM(100, return_sequences=True,\
                       implementation=2, \
                       recurrent_dropout = 0.2,
-                      dropout=0.2)(doc_encoder)
+                      dropout=0.2)(mask_doc)
     #norm_doc_1 = BatchNormalization()(l_lstm_para)
     drop_out = Dropout(0.2)(l_lstm_para) 
     l_att_para = AttLayer(regularizer=l12_reg)(l_lstm_para)
