@@ -301,8 +301,8 @@ def basicModel(embedding_matrix,MAX_NB_WORDS,MAX_PARA_LENGTH,):
     l_att_para = AttLayer(regularizer=l12_reg)(l_lstm_para)
     weighted_sum_doc = WeightedSum()([drop_out, l_att_para])
 
-    #batch_norm = BatchNormalization()(weighted_sum_doc)
-    drop_out = Dropout(0.2)(weighted_sum_doc)
+    batch_norm = BatchNormalization()(weighted_sum_doc)
+    drop_out = Dropout(0.2)(batch_norm)
 
     preds = Dense(1, activation='sigmoid',kernel_regularizer=l12_reg)(drop_out) 
 
