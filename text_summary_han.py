@@ -68,8 +68,8 @@ epochs_num = 200
 #num_folder = 5
 path = '/home/jujun/fraudprediction_10k/data/rm_name/'
 hanpath = '/home/jujun/fraudprediction_10k/HAN/'
-date = '20200419'
-class_weights = {0: 1, 1:25.0}
+date = '20200421'
+class_weights = {0: 1, 1:20.0}
 
 
 
@@ -208,7 +208,31 @@ class AttLayer(Layer):
         return None    
 
 
+# class AttLayer(Layer):
+#     def __init__(self, **kwargs):
+#         self.init = initializers.get('normal')
+#         #self.input_spec = [InputSpec(ndim=3)]
+#         super(AttLayer, self).__init__(** kwargs)
 
+#     def build(self, input_shape):
+#         assert len(input_shape)==3
+#         #self.W = self.init((input_shape[-1],1))
+#         self.W = self.init((input_shape[-1],))
+#         #self.input_spec = [InputSpec(shape=input_shape)]
+#         self.trainable_weights = [self.W]
+#         super(AttLayer, self).build(input_shape)  # be sure you call this somewhere!
+
+#     def call(self, x, mask=None):
+#         eij = K.tanh(K.dot(x, self.W))
+
+#         ai = K.exp(eij)
+#         weights = ai/K.sum(ai, axis=1).dimshuffle(0,'x')
+
+#         weighted_input = x*weights.dimshuffle(0,1,'x')
+#         return weighted_input.sum(axis=1)
+
+#     def get_output_shape_for(self, input_shape):
+#         return (input_shape[0], input_shape[-1])
 
 
 class WeightedSum(Layer):
@@ -258,7 +282,8 @@ def basicModel(embedding_matrix,MAX_NB_WORDS,MAX_PARA_LENGTH,MAX_PARAS):
     para_input = Input(shape=(MAX_PARA_LENGTH, ), dtype='int32')
     embedded_sequences = embedding_layer(para_input)
     #norm_sequence = BatchNormalization()(embedded_sequences)
-    l_lstm_sen = Bidirectional(GRU(100, return_sequences=True, implementation=2))(embedded_sequences)
+    l_lstm_sen = Bidirectional(GRU(70, return_sequences=True, implementation=2))(embedded_sequences)
+    #l_dense_sen = TimeDistributed(Dense(140))(l_lstm_sen)
     #drop_out = Dropout(0.2)(l_lstm_sen)
     l_att = AttLayer()(l_lstm_sen)
     weighted_sum = WeightedSum()([l_lstm_sen,l_att])
@@ -267,17 +292,18 @@ def basicModel(embedding_matrix,MAX_NB_WORDS,MAX_PARA_LENGTH,MAX_PARAS):
     
     doc_input = Input(shape=(MAX_PARAS, MAX_PARA_LENGTH), dtype='int32')
     doc_encoder = TimeDistributed(paraEncoder)(doc_input)
-    mask_doc = Masking(mask_value=0.0)(doc_encoder)
+    #mask_doc = Masking(mask_value=0.0)(doc_encoder)
     #norm_doc = BatchNormalization()(mask_doc)
-    l_lstm_para = Bidirectional(GRU(100, return_sequences=True, implementation=2))(mask_doc)
+    l_lstm_para = Bidirectional(GRU(70, return_sequences=True, implementation=2))(doc_encoder)
+    #l_dense_para = TimeDistributed(Dense(140))(l_lstm_para)
     #norm_doc_1 = BatchNormalization()(l_lstm_para)
     #drop_out = Dropout(0.2)(l_lstm_para) 
     l_att_para = AttLayer()(l_lstm_para)
     weighted_sum_doc = WeightedSum()([l_lstm_para, l_att_para])
-    batch_norm = BatchNormalization()(weighted_sum_doc)
-    drop_out = Dropout(0.2)(batch_norm)
+    #batch_norm = BatchNormalization()(weighted_sum_doc)
+    #drop_out = Dropout(0.2)(batch_norm)
 
-    preds = Dense(1, activation='sigmoid',kernel_regularizer=l12_reg)(drop_out) 
+    preds = Dense(1, activation='sigmoid',kernel_regularizer=l12_reg)(weighted_sum_doc) 
 
     model = Model(doc_input, preds)
     model.summary()
@@ -296,9 +322,9 @@ def trainModel(x_train, y_train, Model_Filepath, model,epochs_num, x_val, y_val,
     auc_ap_eval = Evaluation(validation_data=(x_val, y_val), interval=1)
     #precision_eval = PrecisionEvaluation(validation_data=(x_train, y_train), interval=1)
     
-    earlyStopping = EarlyStopping(monitor='Avg_Prec',patience = 5, verbose =2, mode ='max')
+    earlyStopping = EarlyStopping(monitor='auc',patience = 5, verbose =2, mode ='max')
     #checkpoint = ModelCheckpoint(Model_Filepath,save_weights_only=True, period=5)
-    checkpoint = ModelCheckpoint(Model_Filepath,save_weights_only=True, monitor='Avg_Prec', verbose=2, save_best_only=True, mode ='max')
+    checkpoint = ModelCheckpoint(Model_Filepath,save_weights_only=True, monitor='auc', verbose=2, save_best_only=True, mode ='max')
                                  
     print("training start...")
     training=model.fit(x_train,y_train,
@@ -320,9 +346,10 @@ df.columns=[ "Avg_Prec","acc","auc","loss", "val_acc", "val_loss"]
 df.index.name='epoch'
 print(df)
 
-fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8,3));
-df[["acc", "val_acc"]].plot(ax=axes[0]);
-df[["loss", "val_loss"]].plot(ax=axes[1]);
+fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(8,3))
+df[["acc", "val_acc"]].plot(ax=axes[0])
+df[["loss", "val_loss"]].plot(ax=axes[1])
+df[["auc"]].plot(ax=axes[2])
 plt.savefig('plot_smr'+date+ '.pdf')
 
 
